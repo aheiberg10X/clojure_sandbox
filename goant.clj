@@ -23,6 +23,8 @@
 
 (defn blank-whats [coord] 0)
 
+(def something-new 3)
+
 (defn pheremone-target [dim target]
   (let [max-distance (coords/distance-between [0 0] [dim dim])]
     (fn [coord] (- max-distance (coords/distance-between target coord)))))
