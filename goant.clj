@@ -2,7 +2,8 @@
 			     [highlife.parameters :as params]
 			     [highlife.coords :as coords]
 			     [highlife.moves :as moves]
-			     [highlife.moveactions :as mas]))
+			     [highlife.moveactions :as mas]
+			     [highlife.lib :as lib] :reload-all))
 
 
 
@@ -12,10 +13,10 @@
 
 ;just take the first occupier
 (defn neighbor-whos [coord whowhere]
-  (map #(first (get whowhere %)) (params/GET-NEIGHBOR-COORDS coord)))
+  (map #(first (get whowhere % nil)) (params/GET-NEIGHBOR-COORDS coord)))
 
 (defn neighbor-whats [coord whatwhere]
-  (map #(get whatwhere %) (params/GET-NEIGHBOR-COORDS coord)))
+  (map #(get-in whatwhere % nil) (params/GET-NEIGHBOR-COORDS coord)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; initial conditions
@@ -34,19 +35,30 @@
 	 (vec (for [y (range dim)]
 		(ref (what-func [x y])))))))
 
-;(defn make-whatwhere-with-target [dim target]
-;  (let [p (partial (partial pheremore-target dim) target)]
-;    (make-whatwhere dim p)))
+;; (defn print-whatwhere [whatwhere]
+;;   (let [dim (count whatwhere)
+;; 	coords (for [x (range dim) y (range dim)] [x y])]
+;;     (map #(println % (get-in whatwhere % -1)) coords)))
 
-(defn print-whatwhere [dim whatwhere]
-  (let [coords (for [x (range dim) y (range dim)] [x y])]
-    (map #(println % (get-in whatwhere % -1)) coords)))
-					      
+(defn print-whatwhere [whatwhere]
+  (let [dim (count whatwhere)]
+    (for [x (range dim)]
+      (for [y (range dim)]
+	(do (if (and (= x 0) (= y 0)) (print "          "))
+	    (if (= y (dec dim))
+	      (print (deref (get-in whatwhere [x y])) "\n")
+	      (print (deref (get-in whatwhere [x y])) " | "))
+	    (inc x))))))   
 
-(def whatwhere (make-whatwhere DIM (pheremone-target DIM [7 5])))
-;(def whatwhere (make-whatwhere DIM blank-whats))
-;(def whowhere {[1 1] [(ref "loner")] [5 6] [(ref "a friend!")]})
-(def whowhere {[5 6] [(ref "the dude")]})
+
+
+(defn reset []
+  ;(def whatwhere (make-whatwhere params/DIM (pheremone-target params/DIM [7 5])))
+  (def whatwhere (make-whatwhere params/DIM blank-whats))
+  (def whowhere {[1 1] [(ref "loner")]})); [5 6] [(ref "a friend!")]})
+
+(reset)  
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -57,11 +69,13 @@
 (defn get-moves-do-actions [whowhere]
   (map (fn [keyvalue]
          (let [[coord who] keyvalue
-	       what (get whatwhere coord)
 	       neighbors (neighbor-whos coord whowhere)
 	       neighbor-tiles (neighbor-whats coord whatwhere)
-               [move action] (mas/explore who what neighbors neighbor-tiles)]
+	       lkjd (println "heighbor-tiles" coord neighbor-tiles)
+               [move action] (mas/explore who neighbors neighbor-tiles)
+	       depr (println "lksadflajhlkga")]
            (action coord whatwhere)
+	   (println "action done, now do move" move coord)
            (partial move coord)))
        whowhere))
 
@@ -74,7 +88,7 @@
 (defn step [num]
   (loop [ww whowhere
          gen num]
-    (println gen)
+    (println gen ww)
     (if (= 0 gen)
       (def whowhere ww)
       (recur (make-moves ww) (dec gen)))))
