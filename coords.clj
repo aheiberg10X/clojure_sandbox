@@ -58,9 +58,9 @@
 	    %)) coord))
 
 (defn bounded-translate [coord dim]
-  (if (coord-in-bounds? coord)
+  (if (coord-in-bounds? coord dim)
     coord
-    nil))
+    (vec (take (count coord) (repeat nil)))))
 
 ;(defn toroid-neighbor-coords [coord dim]
 ;  (map #(toroidify % dim) (neighbor-coords coord)))

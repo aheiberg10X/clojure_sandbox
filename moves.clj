@@ -6,10 +6,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn move [oldcoord newcoord translator whowhere dim]
-  (println oldcoord newcoord)
+  (println "main move")
   (let [self (get whowhere oldcoord)
 	translated (translator newcoord dim)]
-    (if (and (coords/coord-in-bounds? translated dim) (not (= oldcoord translated)))
+    (if (and translated (not (= oldcoord translated)))
       (assoc (dissoc whowhere oldcoord)
              translated
              (concat self (get whowhere translated)))
@@ -17,10 +17,15 @@
 
 ;filter neighbors to only valid points?  
 (defn get-moves [translator dim]
-  (map (fn [func] (fn [coord whowhere] (move coord (func coord) translator whowhere dim)))
-       (coords/neighbor-func-seq)))
+  (vec (map (fn [func]
+	      (fn [coord whowhere]
+		(println "can you see meeee?")
+		(move coord (func coord) translator whowhere dim)))
+	    (coords/neighbor-func-seq))))
 
 (def moves (get-moves params/TRANSLATOR params/DIM))
+
+(defn no-move [coord whowhere] whowhere)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;   complex moves
@@ -39,7 +44,7 @@
 (def quadrant-move-map
      (apply hash-map (interleave [[1 1]  [1 0]  [1 -1]
                                   [0 1]  [0 0]  [0 -1]
-                                  [-1 1] [-1 0] [-1 -1]] params/MOVES)))
+                                  [-1 1] [-1 0] [-1 -1]] moves)))
 
 (defn move-to-target [target coord whowhere]
   (let [quadrant (which-quadrant coord target)]
@@ -81,3 +86,5 @@
         (if (empty? tail)
           (println "distribution is messed, random not found in any interval")
           (recur (inc ix) tail random))))))
+
+
