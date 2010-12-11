@@ -13,18 +13,16 @@
 
 ;just take the first occupier
 (defn neighbor-whos [coord whowhere]
-  (map #(first (get whowhere % nil)) (params/GET-NEIGHBOR-COORDS coord)))
+  (map #(first (get whowhere % [params/no-one])) (params/GET-NEIGHBOR-COORDS coord)))
 
 (defn neighbor-whats [coord whatwhere]
-  (map #(get-in whatwhere % nil) (params/GET-NEIGHBOR-COORDS coord)))
+  (map #(get-in whatwhere % params/oob-tile) (params/GET-NEIGHBOR-COORDS coord)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; initial conditions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn blank-whats [coord] 0)
-
-(def something-new 3)
 
 (defn pheremone-target [dim target]
   (let [max-distance (coords/distance-between [0 0] [dim dim])]
@@ -35,11 +33,6 @@
 	 (vec (for [y (range dim)]
 		(ref (what-func [x y])))))))
 
-;; (defn print-whatwhere [whatwhere]
-;;   (let [dim (count whatwhere)
-;; 	coords (for [x (range dim) y (range dim)] [x y])]
-;;     (map #(println % (get-in whatwhere % -1)) coords)))
-
 (defn print-whatwhere [whatwhere]
   (let [dim (count whatwhere)]
     (for [x (range dim)]
@@ -49,7 +42,6 @@
 	      (print (deref (get-in whatwhere [x y])) "\n")
 	      (print (deref (get-in whatwhere [x y])) " | "))
 	    (inc x))))))   
-
 
 
 (defn reset []
@@ -70,6 +62,7 @@
   (map (fn [keyvalue]
          (let [[coord who] keyvalue
 	       neighbors (neighbor-whos coord whowhere)
+	       asdf (println "neighbors" neighbors)
 	       neighbor-tiles (neighbor-whats coord whatwhere)
 	       lkjd (println "heighbor-tiles" coord neighbor-tiles)
                [move action] (mas/explore who neighbors neighbor-tiles)
@@ -89,6 +82,7 @@
   (loop [ww whowhere
          gen num]
     (println gen ww)
+    (println (print-whatwhere whatwhere))
     (if (= 0 gen)
       (def whowhere ww)
       (recur (make-moves ww) (dec gen)))))

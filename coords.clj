@@ -27,9 +27,12 @@
 (defn downleft [coord] (down (left coord)))
 
 (defn neighbor-func-seq []
-  [upleft   up   upright
-   left     same right
-   downleft down downright])
+  [upleft up upright right downright down downleft left])
+  ;[upleft   up   upright
+  ; left     same right
+  ; downleft down downright])
+
+(def no-move-ix 4)
 
 (defn neighbor-coords [coord]
   (map #(% coord) (neighbor-func-seq)))

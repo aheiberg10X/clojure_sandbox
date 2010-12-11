@@ -8,8 +8,9 @@
 (defn move [oldcoord newcoord translator whowhere dim]
   (println "main move")
   (let [self (get whowhere oldcoord)
-	translated (translator newcoord dim)]
-    (if (and translated (not (= oldcoord translated)))
+	translated (translator newcoord dim)
+	inside? (every? #(if % true false) translated)]
+    (if (and inside? (not (= oldcoord translated)))
       (assoc (dissoc whowhere oldcoord)
              translated
              (concat self (get whowhere translated)))
