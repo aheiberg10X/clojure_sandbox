@@ -1,0 +1,37 @@
+(ns highlife.moveactions (:require [highlife.moves as moves]
+				   [highlife.actions as actions]))
+
+;move directly to a target
+(defn move-to-44 [self neighbors]
+  [(partial move-to-target [4 4]) no-action])
+
+;randomly pick a direction to move until you have found at least one neighbor
+(defn find-someone [myself mytile neighbors tiles]
+  (let [num-neighbors (reduce (fn [sum n] (+ sum (if n 1 0))) 0 neighbors)]
+    (println "findsomeone" num-neighbors)
+    (if (<= num-neighbors 1)
+      ;(partial move-from-distribution move-down-dist)
+      [random-move mark-explored] 
+      [no-move no-action])))
+
+;(defn directed-wander [self neighbors])
+
+(defn get-number [tile-ref]
+  (if tile-ref @tile-ref -1))
+
+(defn most-attractive-tile [tile-scoring-func tiles]
+  (reduce (fn [acc new]
+            (let [[maxix maxv curix] acc
+                  newv (tile-scoring-func new)]                    
+              (if (> newv maxv)
+                [curix newv (inc curix)]
+                [maxix maxv (inc curix)])))
+          [0 0 0]
+          tiles))
+
+(defn follow-your-nose [myself mytile neighbors tiles]
+  (let [mytile-sexiness @mytile
+        [ix sexiness whocare] (most-attractive-tile get-number tiles)]
+    (if (> mytile-sexiness sexiness)
+      [no-move no-action]
+      [(nth moves ix) lay-pheremone])))

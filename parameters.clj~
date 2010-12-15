@@ -1,0 +1,5 @@
+(ns highlife.parameters)
+
+(def DIM 10)
+(def TRANSLATOR coords/no-transate)
+(def MOVES (moves/get-moves TRANSLATOR DIM))

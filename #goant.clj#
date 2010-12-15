@@ -112,7 +112,7 @@
 ;;5000 trials
 ;; walk-around-boundary (weighted-choose): 60.1, 61.1 (52549 msec)
 ;;                      (first-positive ): 82.2 (32191 msec)
-;; walk-away-boundary : 
+;; walk-away-boundary : 62.1 (55113 msec)
 ;; explore : 62.7, 61.9 (60068 msec)
 (defn avg [seq] (/ (apply + seq) (count seq)))
 

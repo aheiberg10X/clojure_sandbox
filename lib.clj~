@@ -1,0 +1,2 @@
+(defn tupleize [colls]
+  (vec (map first colls)))

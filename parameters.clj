@@ -1,7 +1,6 @@
-(ns highlife.parameters (:require [highlife.coords :as coords]
-				  [highlife.moves :as moves]))
+(ns highlife.parameters (:require [highlife.coords :as coords]))
 
-(def DIM 5)
+(def DIM 10)
 (def TRANSLATOR coords/bounded-translate)
 (def GET-NEIGHBOR-COORDS (coords/get-translated-neighbors DIM TRANSLATOR))
 (def oob-tile (ref "verboten"))

@@ -13,4 +13,7 @@
 	acc
 	(recur (conj acc newtuple) (map rest c))))))
 
+(defn two-tupleize [coll1 coll2]
+  (map #(vector %1 %2) coll1 coll2))
+
 
