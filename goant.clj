@@ -3,9 +3,9 @@
 			     [highlife.coords :as coords]
 			     [highlife.moves :as moves]
 			     [highlife.moveactions :as mas]
-			     [highlife.lib :as lib] :reload-all))
-
-
+			     [highlife.lib :as lib]
+			     [highlife.prob :as prob]
+			     :reload-all))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; get local information
@@ -28,10 +28,52 @@
   (let [max-distance (coords/distance-between [0 0] [dim dim])]
     (fn [coord] (- max-distance (coords/distance-between target coord)))))
 
+(defn make-whowhere [dim pop]
+  (let [rand-coords (take pop (repeatedly (fn [] (coords/make-random-coord dim))))
+	names (take pop (map #(ref (str "dude" %)) (iterate inc 0)))]
+    (reduce (fn [ww tuple]
+	      (let [[coord name] tuple]
+		(loop [c coord]
+		  (if (get ww c) (recur (coords/make-random-coord dim)) (assoc ww c name)))))
+	    {}
+	    (lib/tupleize rand-coords names))))
+
 (defn make-whatwhere [dim what-func]
   (vec (for [x (range dim)]
 	 (vec (for [y (range dim)]
 		(ref (what-func [x y])))))))
+
+(defn prob-make-who-moves-how [whowhere moveactions scores]
+  (if (= (count moveactions) (count scores))
+    (reduce (fn [move-map wwkv]
+	      (let [[coord whoref] wwkv
+		    chosen-move (get moveactions ((prob/make-dist scores) (rand)))]
+		(assoc move-map whoref chosen-move))) {} whowhere)
+    (println "mismatch between moveactions and scores")))
+
+;;if we want to count up the actual distribution
+(defn summarize-who-moves-how [who-moves-how]
+  (reduce (fn [count-map wmhkv]
+	    (let [[who how] wmhkv]
+	      (assoc count-map how (inc (get count-map how 0))))) {} who-moves-how))
+
+(defn expand-scores [scores]
+  (loop [i 0
+	 scrs scores
+	 expscrs []]
+    (if (= 0 (count scrs))
+      expscrs
+      (recur (inc i) (rest scrs) (concat expscrs (take (first scrs) (repeat i)))))))
+  
+(defn make-who-moves-how [whowhere moveactions scores]
+  (if (= (count whowhere) (apply + scores))
+    (if (= (count moveactions) (count scores))
+      (reduce (fn [move-map whoix]
+		(let [[who maix] whoix]
+		  (assoc move-map who (get moveactions maix))))
+	      {} (lib/tupleize (map second whowhere) (expand-scores scores)))
+      (println "mismatch between moveactions and scores"))
+    (println "move assignments don't line up with the number of whos")))
 
 (defn print-whatwhere [whatwhere whowhere]
   (let [dim (count whatwhere)]
@@ -47,14 +89,16 @@
 		(print (deref (get-in whatwhere [x y])) "| ")))
 	    "")))))   
 
-
 (defn reset []
   ;(def whatwhere (make-whatwhere params/DIM (pheremone-target params/DIM [7 5])))
   (def whatwhere (make-whatwhere params/DIM blank-whats))
-  (def whowhere {[6 5] [(ref "loner")]})); [9 9] [(ref "a friend!")]}))
+  (def whowhere (make-whowhere params/DIM 3))
+  (def who-moves-how (make-who-moves-how whowhere
+  					 [mas/explore mas/walk-around-boundary mas/walk-away-boundary]
+  					 [1 1 1])))
 
-(reset)  
 
+(reset)   
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -63,47 +107,49 @@
 
 ;;perform the actions, sideeffects on whatwhere
 ;;execute the moves
-(defn make-moves [whowhere whatwhere]
-  (reduce (fn [new-ww move] (move new-ww)) whowhere
+(defn make-moves [whowhere whatwhere who-moves-how]
+  (reduce (fn [new-ww pending-move] (pending-move new-ww)) whowhere
 	  (map (fn [keyvalue]
 		 (let [[coord who] keyvalue
 		       neighbors (neighbor-whos coord whowhere)
 		       their-tiles (neighbor-whats coord whatwhere)
-		       [move action] (mas/walk-away-boundary who neighbors their-tiles)]
+		       [move action] ((get who-moves-how who) who neighbors their-tiles)]
 		   (action coord whatwhere)
 		   (partial move coord)))
 	       whowhere)))
 
-(defn step [whowhere whatwhere num]
+(defn step [num]
   (loop [ww whowhere
          gen 0]
     (println gen ww)
     (println (print-whatwhere whatwhere ww))
     (if (< gen num)
-      (recur (make-moves ww whatwhere) (inc gen))
+      (recur (make-moves ww whatwhere who-moves-how) (inc gen))
       (def whowhere ww))))
 
-(defn move-until-target-found [whowhere whatwhere target cutoff]
+(defn move-until-target-found [whowhere whatwhere who-moves-how target cutoff]
   (loop [ww whowhere gen 0]
     (let [matches (filter (fn [x] (let [[coord ref] x] (= coord target))) ww)
 	  found? (>= (count matches) 1)]
-      ;;(println (print-whatwhere whatwhere ww))
       (if found?
 	gen
 	(if (< gen cutoff)
-	  (recur (make-moves ww whatwhere) (inc gen))
+	  (recur (make-moves ww whatwhere who-moves-how) (inc gen))
 	  cutoff)))))
 
-(defn find-steps-seq [trials]
+(defn find-steps-seq [trials how-move]
   (loop [i 1 acc []]
     (let [starting-coord (coords/make-random-coord params/DIM)
 	  ;;der (println "starting coord" starting-coord)
 	  whatwhere (make-whatwhere params/DIM blank-whats)
-	  whowhere {starting-coord (ref "youknowtheguy")}
+	  whowhere (make-whowhere params/DIM (apply + how-move))
+	  ;;adsf (println whowhere)
+	  poss-moves [mas/explore mas/walk-around-boundary mas/walk-away-boundary]
+	  who-moves-how (make-who-moves-how whowhere poss-moves how-move)
 	  target-coord (coords/make-random-coord params/DIM)
 	  ;;der (println "target-coord" target-coord)
 	  cutoff (* params/DIM params/DIM 2)
-	  steps (move-until-target-found whowhere whatwhere target-coord cutoff)]
+	  steps (move-until-target-found whowhere whatwhere who-moves-how target-coord cutoff)]
 	  ;;der (println "steps" steps)]
       (if (< i trials)
 	(recur (inc i) (cons steps acc))
@@ -112,9 +158,9 @@
 ;;5000 trials
 ;; walk-around-boundary (weighted-choose): 60.1, 61.1 (52549 msec)
 ;;                      (first-positive ): 82.2 (32191 msec)
-;; walk-away-boundary : 
+;; walk-away-boundary : 62.1 (55113 msec)
 ;; explore : 62.7, 61.9 (60068 msec)
-(defn avg [seq] (/ (apply + seq) (count seq)))
+(defn avg [seq] (time (/ (apply + seq) (count seq))))
 
 (defn count-visited [whatwhere]
   (reduce (fn [c n] (+ c (apply + (map mas/pheremone-level n)))) 0 whatwhere))

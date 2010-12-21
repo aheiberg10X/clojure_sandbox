@@ -1,0 +1,10 @@
+MoveAction,Ants,Trials,Generations,Time
+explore,1,5000,62.7,60068
+explore,2,5000,32.1,40059
+
+walk-around-boundary,1,5000,61.1,52549
+walk-around-boundary,2,5000,32.5,54476
+
+walk-away-boundary,1,5000,62.1,55113
+walk-away-boundary,2,5000,31.9,55779
+walk-away-boundary,2,5000,21.5,57432

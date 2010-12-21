@@ -11,9 +11,8 @@
 	inside? (every? #(if % true false) translated)
 	already-occupied? (get whowhere translated)]
     (if (and inside? (not already-occupied?) (not (= oldcoord translated)))
-      (assoc (dissoc whowhere oldcoord)
-             translated
-             (concat self (get whowhere translated)))
+      (assoc (dissoc whowhere oldcoord) translated self)
+             ;;(concat self (get whowhere translated)))
       whowhere)))
 
 ;filter neighbors to only valid points?  

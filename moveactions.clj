@@ -2,7 +2,8 @@
 			           [highlife.moves :as m]
 				   [highlife.actions :as a]
 				   [highlife.lib :as lib]
-				   [highlife.parameters :as params]))
+				   [highlife.parameters :as params]
+				   [highlife.prob :as prob]))
 
 ;move directly to a target
 (defn move-to-44 [self neighbors]
@@ -76,7 +77,6 @@
 	   (if (= 0 (pheremone-level tile)) 100 0)))
        their-tiles))
 
-
 (defn boundary-map-cycle [tiles]
   (cycle (map (fn [x] ((partial m/which-side 0) (pheremone-level x))) tiles)))
 
@@ -85,8 +85,7 @@
 (defn shingle-score [follow-boundary? shingle]
   (let [middle (second shingle)
 	abssum (apply + (map math/abs shingle))
-	switch-sum (if follow-boundary? abssum (- (count shingle) abssum))]
-		                               ;;(if (> abssum 0) 0 1))]
+	switch-sum (if follow-boundary? abssum (- (count shingle) abssum))]                               
     (if (= middle 0) switch-sum
 	(if (= middle -1) -1 0))))
 
@@ -110,35 +109,22 @@
 ;;  choosing
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;;-1 corresponds to an OOB tile, so:
+;; [0 -1 20 30 10 -1] -> [0 0 20 30 10 0]
+;; [0 -1 0 0 0 -1] -> [1 0 1 1 1 0]
 (defn not-all-zero [sorted-scores]
   (let [no-pos-choice (every? #(<= % 0) sorted-scores)]
     (if no-pos-choice
       (map (fn [x] (if (< x 0) 0 1)) sorted-scores)
       (map (fn [x] (if (< x 0) 0 x)) sorted-scores))))
-
-;;return function that takes 0 <= random <= 1 and returns 0 <= ix <= (count sorted-scores)
-;;  this returned function will return an index i
-;;  with P( sorted-scores[i] / SUM(sorted-scores) )
-(defn make-dist [sorted-scores]
-  (let [sorted-scores (not-all-zero sorted-scores)
-	total (apply + sorted-scores)]
-    (loop [prev-num 0
-	   acc []
-	   scores sorted-scores]
-      (if (empty? scores)
-	(fn [random]
-	  (loop [s acc i 0]
-	    (if (<= random (first s)) i (recur (rest s) (inc i)))))
-	(let [new-num (+ prev-num (/ (first scores) total))]
-	  (recur new-num (conj acc new-num) (rest scores)))))))
 	
 ;; returns 0-8, to be 'i' in: (get m/moves i)
 (defn top-x-weighted-choose [x scores]
-  (let [scores-and-ixs (lib/two-tupleize scores (range (count scores)))
+  (let [scores-and-ixs (lib/tupleize scores (range (count scores)))
         sorted-tuples (reverse (sort-by #(first %) scores-and-ixs))
 	sorted-scores (take x (map #(first %) sorted-tuples))
 	sorted-ixs (vec (take x (map #(second %) sorted-tuples)))
-	chosen ((make-dist sorted-scores) (rand))]
+	chosen ((prob/make-dist (not-all-zero sorted-scores)) (rand))]
     (get sorted-ixs chosen)))
 
 (defn test [num]
@@ -162,7 +148,8 @@
 
 (defn explore [myself neighbors their-tiles]
   (let [scores (explorer-scorer neighbors their-tiles)
-        chosen-ix (top-x-weighted-choose (count scores) scores)]            
+        chosen-ix (top-x-weighted-choose (count scores) scores)]
+	;;chosen-ix (first-positive-score scores)]
     [(get m/moves chosen-ix) (a/lay-pheremone 1)]))
 
 ;;if possible move to an open space that borders an explored or off-map piece
