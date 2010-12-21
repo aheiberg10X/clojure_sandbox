@@ -1,6 +1,0 @@
-(ns highlife.actions)
-
-(defn no-action [coord whatwhere])
-
-(defn lay-pheremone [coord whatwhere]
-  (dosync (alter (get whatwhere coord) + 1)))
