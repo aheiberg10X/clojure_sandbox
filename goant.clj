@@ -5,6 +5,7 @@
 			     [highlife.moveactions :as mas]
 			     [highlife.lib :as lib]
 			     [highlife.prob :as prob]
+                             [highlife.whostate :as ws]
 			     :reload-all))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -28,52 +29,89 @@
   (let [max-distance (coords/distance-between [0 0] [dim dim])]
     (fn [coord] (- max-distance (coords/distance-between target coord)))))
 
-(defn make-whowhere [dim pop]
-  (let [rand-coords (take pop (repeatedly (fn [] (coords/make-random-coord dim))))
-	names (take pop (map #(ref (str "dude" %)) (iterate inc 0)))]
-    (reduce (fn [ww tuple]
-	      (let [[coord name] tuple]
-		(loop [c coord]
-		  (if (get ww c) (recur (coords/make-random-coord dim)) (assoc ww c name)))))
-	    {}
-	    (lib/tupleize rand-coords names))))
+
+(defn make-whos-from-dist [ids move-actions dist]
+  (if (= (count move-actions) (count dist))
+    (take (count ids)
+          (map (fn [id]
+                 (ws/new-who (str id) (dist (rand))))
+               ids))))
+
+(defn expand-quota [quota]
+  (loop [i 0
+	 qt quota
+	 expqt []]
+    (if (= 0 (count qt))
+      expqt
+      (recur (inc i) (rest qt) (concat expqt (take (first qt) (repeat i)))))))
+
+(defn make-whos-from-quota [ids move-actions quota]
+  (if (= (count ids) (apply + quota)) 
+    (if (= (count move-actions) (count quota))
+      (take (count ids) (map (fn [tuple]
+                          (let [[id ma-ix] tuple 
+                                move-action (get move-actions ma-ix)]
+                            (ws/new-who (str id) move-action)))
+                        (lib/tupleize ids (expand-quota quota))))
+      (println "number of move-actions != number of quotas"))
+    (println "mismatch between moveaction assignments and population ")))
+
+(defn make-whowhere [dim who-ids]
+  (reduce (fn [ww who-id]
+            (let [coord (coords/make-random-coord dim)]
+              (loop [c coord]
+                (if (get ww c) (recur (coords/make-random-coord dim)) (assoc ww c who-id)))))
+          {}
+          who-ids))
 
 (defn make-whatwhere [dim what-func]
   (vec (for [x (range dim)]
 	 (vec (for [y (range dim)]
 		(ref (what-func [x y])))))))
 
-(defn prob-make-who-moves-how [whowhere moveactions scores]
-  (if (= (count moveactions) (count scores))
-    (reduce (fn [move-map wwkv]
-	      (let [[coord whoref] wwkv
-		    chosen-move (get moveactions ((prob/make-dist scores) (rand)))]
-		(assoc move-map whoref chosen-move))) {} whowhere)
-    (println "mismatch between moveactions and scores")))
+(defn make-worldstate-ref [dim pop-size]
+  (let [poss-mas [mas/explore]
+        who-ids (take pop-size (iterate inc 0))
+        whos (make-whos-from-quota who-ids poss-mas [pop-size])
+        whowhere (make-whowhere dim who-ids)
+        whatwhere (make-whatwhere dim blank-whats)]
+    (ref {:whos whos :whowhere whowhere :whatwhere whatwhere})))
 
-;;if we want to count up the actual distribution
-(defn summarize-who-moves-how [who-moves-how]
-  (reduce (fn [count-map wmhkv]
-	    (let [[who how] wmhkv]
-	      (assoc count-map how (inc (get count-map how 0))))) {} who-moves-how))
+;; (defn make-whowhere [dim pop]
+;;   (let [who-tuples (take pop (map #(ws/blank-who dim (str "dude" %)) (iterate inc 0)))]
+;;     (reduce (fn [ww tuple]
+;; 	      (let [[coord name] tuple]
+;; 		(loop [c coord]
+;; 		  (if (get ww c) (recur (coords/make-random-coord dim)) (assoc ww c name)))))
+;; 	    {}
+;;             who-tuples)))
 
-(defn expand-scores [scores]
-  (loop [i 0
-	 scrs scores
-	 expscrs []]
-    (if (= 0 (count scrs))
-      expscrs
-      (recur (inc i) (rest scrs) (concat expscrs (take (first scrs) (repeat i)))))))
+;; (defn prob-make-who-moves-how [whowhere moveactions scores]
+;;   (if (= (count moveactions) (count scores))
+;;     (reduce (fn [move-map wwkv]
+;; 	      (let [[coord whoref] wwkv
+;; 		    chosen-move (get moveactions ((prob/make-dist scores) (rand)))]
+;; 		(assoc move-map whoref chosen-move))) {} whowhere)
+
+;;     (println "mismatch between moveactions and scores")))
+
+;; ;;if we want to count up the actual distribution
+;; (defn summarize-who-moves-how [who-moves-how]
+;;   (reduce (fn [count-map wmhkv]
+;; 	    (let [[who how] wmhkv]
+;; 	      (assoc count-map how (inc (get count-map how 0))))) {} who-moves-how))
+
+
   
-(defn make-who-moves-how [whowhere moveactions scores]
-  (if (= (count whowhere) (apply + scores))
-    (if (= (count moveactions) (count scores))
-      (reduce (fn [move-map whoix]
-		(let [[who maix] whoix]
-		  (assoc move-map who (get moveactions maix))))
-	      {} (lib/tupleize (map second whowhere) (expand-scores scores)))
-      (println "mismatch between moveactions and scores"))
-    (println "move assignments don't line up with the number of whos")))
+;; (defn make-who-moves-how [whowhere moveactions scores]
+;;   (if (= (count whowhere) (apply + scores))
+;;     (if (= (count moveactions) (count scores))
+;;       (reduce (fn [move-map whoix]
+;; 		(let [[who maix] whoix]
+;; 		  (assoc move-map who (get moveactions maix))))
+;; 	      {} (lib/tupleize (map second whowhere) (expand-scores scores)))
+;;       (println "mismatch between moveactions and scores"))
+;;     (println "move assignments don't line up with the number of whos")))
 
 (defn print-whatwhere [whatwhere whowhere]
   (let [dim (count whatwhere)]
@@ -89,16 +127,16 @@
 		(print (deref (get-in whatwhere [x y])) "| ")))
 	    "")))))   
 
-(defn reset []
-  ;(def whatwhere (make-whatwhere params/DIM (pheremone-target params/DIM [7 5])))
-  (def whatwhere (make-whatwhere params/DIM blank-whats))
-  (def whowhere (make-whowhere params/DIM 3))
-  (def who-moves-how (make-who-moves-how whowhere
-  					 [mas/explore mas/walk-around-boundary mas/walk-away-boundary]
-  					 [1 1 1])))
+;; (defn reset []
+;;   ;(def whatwhere (make-whatwhere params/DIM (pheremone-target params/DIM [7 5])))
+;;   (def whatwhere (make-whatwhere params/DIM blank-whats))
+;;   (def whowhere (make-whowhere params/DIM 1))
+;;   (def who-moves-how (make-who-moves-how whowhere
+;;   					 [mas/explore mas/walk-around-boundary mas/walk-away-boundary]
+;;   					 [1 0 0])))
 
 
-(reset)   
+;; (reset)   
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
