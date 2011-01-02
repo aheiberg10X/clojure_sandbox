@@ -1,14 +1,15 @@
 (ns highlife.graphics
   (:gen-class)
   (:require [highlife.parameters :as params]
-            [highlife.goant :as goant])
+            [highlife.goant :as goant]
+            [highlife.moveactions :as mas])
   (:import (java.awt Color Dimension Graphics GridBagLayout GridBagConstraints)
            (javax.swing JButton JPanel JFrame Timer JOptionPane JMenu JMenuBar JMenuItem)
            (java.awt.event ActionListener MouseListener))
   (:use clojure.contrib.except))
 
 (def point-size 8)
-(def generation-length-millis 5000)
+(def generation-length-millis 500)
 
 (def initial-seed (int (* params/DIM params/DIM 0.20))) ; initial population is 20%
 
@@ -35,22 +36,28 @@
       (.setColor color)
       (.fillRect x y width height))))
 
-(defn paint [#^Graphics g alive? pt]
-  (if alive?
-    (fill-point g pt (Color. 0 0 0))
-    (fill-point g pt (Color. 255 255 255))))
+(defn paint [#^Graphics g color pt]
+  (fill-point g pt color))
+
+(defn get-color [ws-ref pt]
+  (let [[whowhere whatwhere whos] (goant/expand-worldstate @ws-ref)]
+    (if (get whowhere pt)
+      (Color. 0 0 0)
+      (if (> (mas/pheremone-level (get-in whatwhere pt)) 0)
+        (Color. 244 248 48)
+        (Color. 255 255 255)))))
 
 ;simualtion panel
-(defn sim-panel [whowhere-ref]
+(defn sim-panel [ws-ref]
   (proxy [JPanel MouseListener] []
     (paintComponent [g]
       (proxy-super paintComponent #^Graphics g)                    
-      (let [dim params/DIM]
+      (let [[whowhere whatwhere whos] (goant/expand-worldstate @ws-ref)]
         (dorun
          (map #(paint g (% 0) (% 1))
               (dosync (doall
                        (for [x (range params/DIM) y (range params/DIM)]
-                         [(if (get @whowhere-ref [x y]) true false) [x y]])))))))
+                         [(get-color ws-ref [x y]) [x y]])))))))
     (mouseClicked [e]
       ;; (let [pt (m-display-to-grid-point [(.getX e) (.getY e)]) cell (get-in grid pt) alive? (:alive? @cell)]
       ;;   (dosync (alter cell assoc :alive? (not alive?)))
@@ -86,28 +93,28 @@
         (.setText this "Resume Simulation")))))
 
 ;;update thread
-;;sim-panel will be my whowhere-ref
-(defn create-sim-thread [whowhere-ref panel]
+;;sim-panel will be my worldstate-ref
+(defn create-sim-thread [worldstate-ref panel]
   (Thread.
    #(let [dim params/DIM
-          grid-seq (for [x (range dim) y (range dim)] (get-in whowhere-ref [x y]))]
+          grid-seq (for [x (range dim) y (range dim)] (get-in worldstate-ref [x y]))]
       (loop [gen 1]
         (if (not @running?)
           (do
             (Thread/sleep 300)
             (recur gen))
           (do
-            ;;;;(dosync (dorun (map update-cell grid-seq (get-living-neighbors-seq whowhere-ref))))
-            (alter whowhere-ref goant/make-moves )
+            ;;;;(dosync (dorun (map update-cell grid-seq (get-living-neighbors-seq worldstate-ref))))
+            (dosync (alter worldstate-ref goant/make-moves))
             (.repaint panel)
             (Thread/sleep generation-length-millis)
             (recur (inc gen))))))))
 
 (defn test []
   (let [frame (JFrame. "Goant")
-        whowhere-ref (ref {[1 1] (ref "the guy")})
-        panel (sim-panel whowhere-ref)
-        sim-thread (create-sim-thread whowhere-ref panel)
+        ws-ref (goant/make-worldstate-ref 10 3)
+        panel (sim-panel ws-ref)
+        sim-thread (create-sim-thread ws-ref panel)
         asdf (println ":wath")
         layout (GridBagLayout.)
         panel-constraints (GridBagConstraints.)]
