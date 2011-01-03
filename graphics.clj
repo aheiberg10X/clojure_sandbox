@@ -5,11 +5,12 @@
             [highlife.moveactions :as mas])
   (:import (java.awt Color Dimension Graphics GridBagLayout GridBagConstraints)
            (javax.swing JButton JPanel JFrame Timer JOptionPane JMenu JMenuBar JMenuItem)
-           (java.awt.event ActionListener MouseListener))
+           (java.awt.event ActionListener MouseListener)
+           (java.lang Thread))
   (:use clojure.contrib.except))
 
 (def point-size 8)
-(def generation-length-millis 500)
+(def generation-length-millis 20)
 
 (def initial-seed (int (* params/DIM params/DIM 0.20))) ; initial population is 20%
 
@@ -27,6 +28,7 @@
 (def m-display-to-grid-point (memoize display-to-grid-point))
 
 ;running state
+(def paused? (atom false))
 (def running? (atom true))
 
 ;;drawing functions
@@ -87,10 +89,21 @@
 (defn pause-life-button [sim-thread]
   (proxy [JButton ActionListener] ["Pause Simulation"]
     (actionPerformed [e]
-      (swap! running? not)
-      (if @running? 
+      (swap! paused? not)
+      (if (not @paused?) 
         (.setText this "Pause Simulation")
         (.setText this "Resume Simulation")))))
+
+;;using the 'x' button in the window is not killing the running thread
+;;can do this using windowListener or something, but screw it
+;;made this button to stop the thread
+(defn make-interrupt-button []
+  (proxy [JButton ActionListener] ["interrupt thread"]
+    (actionPerformed [e]
+      (swap! running? not)
+      (if @running?
+        (.setText this "Interrupt please")
+        (.setText this "ohhhh snap")))))
 
 ;;update thread
 ;;sim-panel will be my worldstate-ref
@@ -100,34 +113,53 @@
           grid-seq (for [x (range dim) y (range dim)] (get-in worldstate-ref [x y]))]
       (loop [gen 1]
         (if (not @running?)
-          (do
-            (Thread/sleep 300)
-            (recur gen))
-          (do
-            ;;;;(dosync (dorun (map update-cell grid-seq (get-living-neighbors-seq worldstate-ref))))
-            (dosync (alter worldstate-ref goant/make-moves))
-            (.repaint panel)
-            (Thread/sleep generation-length-millis)
-            (recur (inc gen))))))))
+          (.interrupt (Thread/currentThread))
+          (if @paused?
+            (do
+              ;;(.interrupt (Thread/currentThread))
+              (Thread/sleep 300)
+              (recur gen)
+              )
+            (do
+              (dosync (alter worldstate-ref goant/make-moves))
+              (.repaint panel)
+              (Thread/sleep generation-length-millis)
+              (recur (inc gen))))))))
+)
 
 (defn test []
   (let [frame (JFrame. "Goant")
-        ws-ref (goant/make-worldstate-ref 10 3)
+        ws-ref (goant/make-worldstate-ref params/DIM 4)
         panel (sim-panel ws-ref)
         sim-thread (create-sim-thread ws-ref panel)
-        asdf (println ":wath")
+        pause-button (pause-life-button sim-thread)
+        interrupt-button (make-interrupt-button)
+        
         layout (GridBagLayout.)
+        pause-button-constraints (GridBagConstraints.)
+        interrupt-button-constraints (GridBagConstraints.)
         panel-constraints (GridBagConstraints.)]
+    
+    (.setDefaultCloseOperation frame 2)
+    (.setDaemon sim-thread true)
+    
+    (.addActionListener pause-button pause-button)
+    (set! (. pause-button-constraints gridx) 0)
+    (set! (. pause-button-constraints gridy) 0)
+    (.addActionListener interrupt-button interrupt-button)
+    (set! (. interrupt-button-constraints gridx) 0)
+    (set! (. interrupt-button-constraints gridy) 1)
+    
     (doto panel
       (.setFocusable true)
       (.addMouseListener panel))
     (doto frame
       (.setLayout layout)
+      (.add pause-button pause-button-constraints)
+      (.add interrupt-button interrupt-button-constraints)
       (.add panel panel-constraints)
       (.pack)
       (.setVisible true))
-    (println "before repaint")
-;;    (.repaint panel)
     (.start sim-thread)))
 
 ;simulation start function - call this to make things go
@@ -174,7 +206,6 @@
 ;;       (.setLayout layout)
 ;;       (.add seed-button seed-button-constraints)
 ;;       (.add clear-button clear-button-constraints)
-
 ;;       (.add pause-button pause-button-constraints)
 ;;       (.add panel panel-constraints)
 ;;       (.pack)
